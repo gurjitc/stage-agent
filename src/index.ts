@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { runStagingOrderAgent } from "./agent/stagingOrderGraph.js";
+import { runSupervisorAgent } from "./agent/supervisorGraph.js";
 
 async function main(): Promise<void> {
   const request = process.argv.slice(2).join(" ").trim();
@@ -11,7 +11,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const result = await runStagingOrderAgent(request);
+  const result = await runSupervisorAgent(request);
   console.log(JSON.stringify(result, null, 2));
 }
 

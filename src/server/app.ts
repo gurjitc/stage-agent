@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runStagingOrderAgent } from "../agent/stagingOrderGraph.js";
+import { runSupervisorAgent } from "../agent/supervisorGraph.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +29,7 @@ app.post("/api/orders/staging", async (req, res) => {
   }
 
   try {
-    const result = await runStagingOrderAgent(requestText);
+    const result = await runSupervisorAgent(requestText);
     res.json(result);
   } catch (error: unknown) {
     res.status(500).json({
