@@ -135,6 +135,8 @@ export async function createStagingOrder(input: {
   customerName: string;
   customerEmail: string | null;
   orderCategory: OrderCategory;
+  fulfillmentProfile: string | null;
+  appliedRuleIds: string[];
   shippingMethod: ShippingMethod;
   deliveryMethod: DeliveryMethod;
   priority: OrderPriority;
@@ -150,6 +152,8 @@ export async function createStagingOrder(input: {
     customerName: input.customerName,
     customerEmail: input.customerEmail,
     orderCategory: input.orderCategory,
+    fulfillmentProfile: input.fulfillmentProfile,
+    appliedRuleIds: input.appliedRuleIds,
     shippingMethod: input.shippingMethod,
     deliveryMethod: input.deliveryMethod,
     priority: input.priority,

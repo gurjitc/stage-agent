@@ -1,6 +1,7 @@
 import { Annotation, StateGraph } from "@langchain/langgraph";
 import { enhanceRequestWithOllama } from "./ollamaExtractor.js";
 import { parseNaturalLanguageRequest } from "./requestParser.js";
+import { buildOrderPlanWithRag, type RagOrderPlanResult } from "../rag/orderPlanRag.js";
 import {
   addLineItemTool,
   createOrderTool,
@@ -22,6 +23,7 @@ const CATEGORY_FALLBACK_QUERIES: Record<ParsedOrderRequest["orderCategory"], str
 const AgentState = Annotation.Root({
   request: Annotation<string>(),
   parsed: Annotation<ParsedOrderRequest | null>(),
+  ragPlan: Annotation<RagOrderPlanResult | null>(),
   customer: Annotation<{ id: string; name: string } | null>(),
   orderId: Annotation<string | null>(),
   finalOrder: Annotation<StagingOrder | null>(),
@@ -43,6 +45,40 @@ async function parseNode(state: AgentStateType): Promise<Partial<AgentStateType>
       usedOllama
         ? "Parsed request fields and used local Ollama (Qwen) to enrich generic line items into structured order data."
         : "Parsed the natural-language prompt into structured fields (customer/email, category, shipping, delivery, priority, destination, line items)."
+    ]
+  };
+}
+
+async function ragPlanNode(state: AgentStateType): Promise<Partial<AgentStateType>> {
+  if (!state.parsed) {
+    throw new Error("Missing parsed request.");
+  }
+
+  const ragPlan = await buildOrderPlanWithRag({
+    request: state.request,
+    parsedRequest: state.parsed
+  });
+
+  const updatedParsed = {
+    ...state.parsed,
+    lineItems:
+      state.parsed.lineItems.length > 0
+        ? state.parsed.lineItems
+        : ragPlan.plan.suggestedItems.map((item) => ({ sku: null, itemText: item.itemText, quantity: item.quantity }))
+  };
+
+  const citedRules = ragPlan.plan.citedRuleIds.slice(0, 5).join(", ");
+
+  return {
+    parsed: updatedParsed,
+    ragPlan,
+    reasoning: [
+      ragPlan.usedLlm
+        ? `RAG retrieved top ${ragPlan.retrievedChunks.length} chunks using ${ragPlan.embeddingModel} and generated OrderPlan with LLM.`
+        : `RAG retrieved top ${ragPlan.retrievedChunks.length} chunks using ${ragPlan.embeddingModel}; fallback planner generated OrderPlan.`,
+      citedRules
+        ? `OrderPlan cited rules: ${citedRules}.`
+        : "OrderPlan returned no explicit cited rules from retrieved chunks."
     ]
   };
 }
@@ -76,6 +112,8 @@ async function createOrderNode(state: AgentStateType): Promise<Partial<AgentStat
     customerName: state.customer.name,
     customerEmail: state.parsed.customerEmail,
     orderCategory: state.parsed.orderCategory,
+    fulfillmentProfile: state.ragPlan?.plan.fulfillmentProfile ?? null,
+    appliedRuleIds: state.ragPlan?.plan.citedRuleIds ?? [],
     shippingMethod: state.parsed.shippingMethod,
     deliveryMethod: state.parsed.deliveryMethod,
     priority: state.parsed.priority,
@@ -180,12 +218,14 @@ async function finalizeNode(state: AgentStateType): Promise<Partial<AgentStateTy
 
 const graph = new StateGraph(AgentState)
   .addNode("parse_request", parseNode)
+  .addNode("rag_order_plan", ragPlanNode)
   .addNode("resolve_customer", resolveCustomerNode)
   .addNode("create_order", createOrderNode)
   .addNode("add_line_items", addItemsNode)
   .addNode("finalize_order", finalizeNode)
   .addEdge("__start__", "parse_request")
-  .addEdge("parse_request", "resolve_customer")
+  .addEdge("parse_request", "rag_order_plan")
+  .addEdge("rag_order_plan", "resolve_customer")
   .addEdge("resolve_customer", "create_order")
   .addEdge("create_order", "add_line_items")
   .addEdge("add_line_items", "finalize_order")
@@ -202,6 +242,7 @@ export async function runStagingOrderAgent(request: string): Promise<AgentRunRes
   const finalState = await graph.invoke({
     request,
     parsed: null,
+    ragPlan: null,
     customer: null,
     orderId: null,
     finalOrder: null,

@@ -9,6 +9,7 @@ The agent now supports:
 - Expanded shipping (`GROUND`, `TWO_DAY`, `OVERNIGHT`, `FREIGHT`, `WHITE_GLOVE`)
 - Delivery methods (`STANDARD_DELIVERY`, `SAME_DAY`, `PICKUP`, `CURBSIDE`, `LOCKER`, `DIGITAL`)
 - Optional local Ollama enrichment with Qwen/Gwen 8B
+- V1 RAG for synthetic business-rule retrieval and OrderPlan generation
 
 ## What this project demonstrates
 
@@ -49,7 +50,13 @@ npm run agent -- "Create a tech order from ops@northwindlabs.test with 2 blue re
 npm run typecheck
 ```
 
-4. Run browser UI:
+4. Run RAG demonstration (without retrieval vs with retrieval):
+
+```bash
+npm run rag:demo -- "Create a curbside order with milk and eggs."
+```
+
+5. Run browser UI:
 
 ```bash
 npm run ui
@@ -124,6 +131,9 @@ $env:OLLAMA_MODEL="gwen:8b"
 - `src/tools/stagingTools.ts`: LangChain tools for customer resolution (name/email), product resolution from generic text, SKU validation, order creation, line-item insertion, and finalization.
 - `src/agent/ollamaExtractor.ts`: Optional local Ollama structured extraction/enrichment layer.
 - `src/agent/stagingOrderGraph.ts`: LangGraph state machine that orchestrates the order lifecycle.
+- `src/rag/ruleRetriever.ts`: Loads synthetic rule docs, chunks text, computes embeddings, and performs top-k similarity search.
+- `src/rag/orderPlanRag.ts`: Builds OrderPlan from retrieved chunks using LLM or deterministic fallback.
+- `src/rag/demo.ts`: Demonstrates why retrieval is needed for rule-grounded decisions.
 - `src/api/stagingApi.ts`: Fake async staging APIs backed by in-memory synthetic data.
 - `src/data/syntheticData.ts`: Synthetic customer and product catalog.
 - `src/index.ts`: CLI entrypoint for ad-hoc testing.
@@ -164,3 +174,21 @@ $env:OLLAMA_MODEL="gwen:8b"
 
 - This project intentionally uses fake APIs and in-memory storage.
 - To productionize: replace fake APIs with real service clients, add retries/timeouts/idempotency, persist state, and add telemetry.
+
+## Synthetic Rule Corpus
+
+- 10 synthetic rule documents are stored in `docs/synthetic-staging-rules/`.
+- The corpus includes approximately 50 business rules (`R-001` through `R-050`).
+- Example synthetic rule used in RAG validation:
+  - `R-011`: CURBSIDE orders containing refrigerated products require fulfillment profile `COLD_CHAIN_2`.
+
+## V1 RAG Flow
+
+```text
+/docs -> chunk -> embedding model -> in-memory vector store -> user request -> embed -> similarity search -> top 5 chunks -> LLM -> OrderPlan
+```
+
+OrderPlan output feeds order creation with:
+- `fulfillmentProfile`
+- `appliedRuleIds`
+- `suggestedItems` when request is generic

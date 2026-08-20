@@ -62,5 +62,19 @@ export const syntheticProducts: SyntheticProduct[] = [
     aliases: ["white labels", "label pack", "labels"],
     categories: ["GROCERY", "REGULAR"],
     unitPrice: 2.15
+  },
+  {
+    sku: "SKU-MLK-006",
+    name: "Synthetic Whole Milk Pack",
+    aliases: ["milk", "whole milk", "refrigerated milk", "dairy milk"],
+    categories: ["GROCERY"],
+    unitPrice: 5.45
+  },
+  {
+    sku: "SKU-EGG-007",
+    name: "Synthetic Egg Carton",
+    aliases: ["eggs", "egg carton", "refrigerated eggs"],
+    categories: ["GROCERY"],
+    unitPrice: 4.85
   }
 ];

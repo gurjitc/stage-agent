@@ -97,6 +97,8 @@ export const createOrderTool = tool(
     customerName: string;
     customerEmail: string | null;
     orderCategory: "REGULAR" | "GROCERY" | "TECH" | "MEDICAL";
+    fulfillmentProfile: string | null;
+    appliedRuleIds: string[];
     shippingMethod: "GROUND" | "TWO_DAY" | "OVERNIGHT" | "FREIGHT" | "WHITE_GLOVE";
     deliveryMethod: "STANDARD_DELIVERY" | "SAME_DAY" | "PICKUP" | "CURBSIDE" | "LOCKER" | "DIGITAL";
     priority: "LOW" | "NORMAL" | "HIGH" | "RUSH";
@@ -113,6 +115,8 @@ export const createOrderTool = tool(
       customerName: z.string(),
       customerEmail: z.string().email().nullable(),
       orderCategory: z.enum(["REGULAR", "GROCERY", "TECH", "MEDICAL"]),
+      fulfillmentProfile: z.string().nullable(),
+      appliedRuleIds: z.array(z.string()),
       shippingMethod: z.enum(["GROUND", "TWO_DAY", "OVERNIGHT", "FREIGHT", "WHITE_GLOVE"]),
       deliveryMethod: z.enum(["STANDARD_DELIVERY", "SAME_DAY", "PICKUP", "CURBSIDE", "LOCKER", "DIGITAL"]),
       priority: z.enum(["LOW", "NORMAL", "HIGH", "RUSH"]),

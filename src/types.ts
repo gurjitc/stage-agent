@@ -47,6 +47,8 @@ export interface StagingOrder {
   customerName: string;
   customerEmail: string | null;
   orderCategory: OrderCategory;
+  fulfillmentProfile: string | null;
+  appliedRuleIds: string[];
   shippingMethod: ShippingMethod;
   deliveryMethod: DeliveryMethod;
   priority: OrderPriority;
