@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Staging Order Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #f6efe6;
+        --bg2: #f8f2ea;
+        --card: #fffaf4;
+        --ink: #1f1a17;
+        --muted: #5f5550;
+        --brand: #0f766e;
+        --brand2: #dc6803;
+        --line: #e7d9cb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", sans-serif;
+        color: var(--ink);
+        min-height: 100vh;
+        background:
+          radial-gradient(1200px 600px at 10% -10%, rgba(220, 104, 3, 0.22), transparent 55%),
+          radial-gradient(1000px 580px at 95% -20%, rgba(15, 118, 110, 0.2), transparent 50%),
+          linear-gradient(160deg, var(--bg), var(--bg2));
+        padding: 28px;
+      }
+
+      .layout {
+        max-width: 1160px;
+        margin: 0 auto;
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 22px;
+        background: linear-gradient(145deg, rgba(255, 250, 244, 0.95), rgba(255, 244, 232, 0.9));
+        box-shadow: 0 16px 40px rgba(56, 46, 36, 0.08);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(1.5rem, 3vw, 2.35rem);
+        letter-spacing: -0.02em;
+      }
+
+      .subtitle {
+        margin-top: 8px;
+        color: var(--muted);
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--card);
+        padding: 18px;
+        box-shadow: 0 10px 30px rgba(52, 43, 35, 0.06);
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: 1fr;
+      }
+
+      @media (min-width: 980px) {
+        .grid {
+          grid-template-columns: 1.1fr 0.9fr;
+        }
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 170px;
+        resize: vertical;
+        border-radius: 12px;
+        border: 1px solid #d7c4b1;
+        padding: 12px;
+        font: 500 0.95rem/1.5 "IBM Plex Mono", monospace;
+        background: #fffdf9;
+        color: #1f1a17;
+      }
+
+      textarea:focus {
+        outline: 2px solid rgba(15, 118, 110, 0.3);
+        border-color: var(--brand);
+      }
+
+      .controls {
+        margin-top: 12px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 11px 16px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        background: linear-gradient(120deg, var(--brand), #0b5f58);
+        color: white;
+        transition: transform 120ms ease, filter 180ms ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.04);
+      }
+
+      button.secondary {
+        background: linear-gradient(120deg, var(--brand2), #b45309);
+      }
+
+      .chip {
+        border: 1px solid #e8d7c7;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        color: #5d5048;
+        background: #fffaf3;
+      }
+
+      .status {
+        min-height: 1.3rem;
+        font-size: 0.92rem;
+        color: var(--muted);
+      }
+
+      .reasoning-list {
+        margin: 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 8px;
+      }
+
+      pre {
+        margin: 0;
+        padding: 14px;
+        background: #1e1b18;
+        color: #f7f1e8;
+        border-radius: 12px;
+        overflow: auto;
+        font: 0.84rem/1.5 "IBM Plex Mono", monospace;
+        max-height: 420px;
+      }
+
+      .fade-in {
+        animation: fade 280ms ease;
+      }
+
+      @keyframes fade {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="layout">
+      <section class="hero">
+        <h1>Staging Order Agent Console</h1>
+        <p class="subtitle">Type an order request in natural language and inspect the generated staging order plus graph/tool reasoning.</p>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <label for="requestInput">Order Request</label>
+          <textarea id="requestInput">Create a tech order from ops@northwindlabs.test with 2 blue reagents and 1 calibration strip for same-day courier to Austin</textarea>
+          <div class="controls">
+            <button id="runBtn">Run Agent</button>
+            <button id="sampleBtn" class="secondary">Load Grocery Sample</button>
+            <span class="chip">POST /api/orders/staging</span>
+          </div>
+          <p class="status" id="status">Ready.</p>
+        </article>
+
+        <article class="panel fade-in">
+          <h2>Reasoning</h2>
+          <ol id="reasoning" class="reasoning-list"></ol>
+        </article>
+      </section>
+
+      <section class="panel fade-in">
+        <h2>Structured Output</h2>
+        <pre id="output">{
+  "message": "Run the agent to see output"
+}</pre>
+      </section>
+    </main>
+
+    <script>
+      const requestInput = document.getElementById("requestInput");
+      const runBtn = document.getElementById("runBtn");
+      const sampleBtn = document.getElementById("sampleBtn");
+      const statusEl = document.getElementById("status");
+      const reasoningEl = document.getElementById("reasoning");
+      const outputEl = document.getElementById("output");
+
+      const grocerySample =
+        "Create a grocery order for Acme Retail with 4 white labels and 2 red cartridges for curbside pickup at Houston by Priya";
+
+      function setStatus(text, isError = false) {
+        statusEl.textContent = text;
+        statusEl.style.color = isError ? "#b42318" : "#5f5550";
+      }
+
+      function renderReasoning(reasoning) {
+        reasoningEl.innerHTML = "";
+        if (!Array.isArray(reasoning) || reasoning.length === 0) {
+          const li = document.createElement("li");
+          li.textContent = "No reasoning entries returned.";
+          reasoningEl.appendChild(li);
+          return;
+        }
+
+        for (const step of reasoning) {
+          const li = document.createElement("li");
+          li.textContent = step;
+          reasoningEl.appendChild(li);
+        }
+      }
+
+      async function runAgent() {
+        const request = requestInput.value.trim();
+        if (!request) {
+          setStatus("Request cannot be empty.", true);
+          return;
+        }
+
+        runBtn.disabled = true;
+        setStatus("Running agent...");
+
+        try {
+          const response = await fetch("/api/orders/staging", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ request })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data?.details || data?.error || "Request failed");
+          }
+
+          renderReasoning(data.reasoning);
+          outputEl.textContent = JSON.stringify(data, null, 2);
+          setStatus("Success. Order created in synthetic staging store.");
+        } catch (error) {
+          renderReasoning([]);
+          outputEl.textContent = JSON.stringify(
+            {
+              error: error instanceof Error ? error.message : "Unknown error"
+            },
+            null,
+            2
+          );
+          setStatus("Agent request failed.", true);
+        } finally {
+          runBtn.disabled = false;
+        }
+      }
+
+      runBtn.addEventListener("click", runAgent);
+      sampleBtn.addEventListener("click", () => {
+        requestInput.value = grocerySample;
+      });
+    </script>
+  </body>
+</html>

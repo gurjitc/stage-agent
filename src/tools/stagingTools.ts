@@ -1,6 +1,14 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { addLineItem, createStagingOrder, finalizeOrder, getProductBySku, searchCustomers } from "../api/stagingApi.js";
+import {
+  addLineItem,
+  createStagingOrder,
+  finalizeOrder,
+  getProductBySku,
+  searchProducts,
+  searchCustomers,
+  searchCustomersByEmail
+} from "../api/stagingApi.js";
 
 export const findCustomerTool = tool(
   async ({ customerName }: { customerName: string }) => {
@@ -40,14 +48,61 @@ export const validateSkuTool = tool(
   }
 );
 
+export const findCustomerByEmailTool = tool(
+  async ({ email }: { email: string }) => {
+    const matches = await searchCustomersByEmail(email);
+    if (matches.length === 0) {
+      throw new Error(`No customer matches found for email '${email}'.`);
+    }
+
+    return {
+      selected: matches[0],
+      alternatives: matches.slice(1, 3)
+    };
+  },
+  {
+    name: "find_customer_by_email",
+    description: "Resolve a request email to a canonical customer record.",
+    schema: z.object({
+      email: z.string().email()
+    })
+  }
+);
+
+export const findProductTool = tool(
+  async ({ query, category }: { query: string; category?: "REGULAR" | "GROCERY" | "TECH" | "MEDICAL" }) => {
+    const matches = await searchProducts(query, category);
+    if (matches.length === 0) {
+      throw new Error(`No product matches found for '${query}'.`);
+    }
+
+    return {
+      selected: matches[0],
+      alternatives: matches.slice(1, 3)
+    };
+  },
+  {
+    name: "find_product",
+    description: "Resolve a generic item description to the best synthetic catalog product/SKU.",
+    schema: z.object({
+      query: z.string().min(2),
+      category: z.enum(["REGULAR", "GROCERY", "TECH", "MEDICAL"]).optional()
+    })
+  }
+);
+
 export const createOrderTool = tool(
   async (input: {
     customerId: string;
     customerName: string;
-    shippingMethod: "GROUND" | "TWO_DAY" | "OVERNIGHT";
+    customerEmail: string | null;
+    orderCategory: "REGULAR" | "GROCERY" | "TECH" | "MEDICAL";
+    shippingMethod: "GROUND" | "TWO_DAY" | "OVERNIGHT" | "FREIGHT" | "WHITE_GLOVE";
+    deliveryMethod: "STANDARD_DELIVERY" | "SAME_DAY" | "PICKUP" | "CURBSIDE" | "LOCKER" | "DIGITAL";
     priority: "LOW" | "NORMAL" | "HIGH" | "RUSH";
     destination: string;
     requestedBy: string;
+    requestSource: "CHAT" | "EMAIL";
     notes: string;
   }) => createStagingOrder(input),
   {
@@ -56,10 +111,14 @@ export const createOrderTool = tool(
     schema: z.object({
       customerId: z.string(),
       customerName: z.string(),
-      shippingMethod: z.enum(["GROUND", "TWO_DAY", "OVERNIGHT"]),
+      customerEmail: z.string().email().nullable(),
+      orderCategory: z.enum(["REGULAR", "GROCERY", "TECH", "MEDICAL"]),
+      shippingMethod: z.enum(["GROUND", "TWO_DAY", "OVERNIGHT", "FREIGHT", "WHITE_GLOVE"]),
+      deliveryMethod: z.enum(["STANDARD_DELIVERY", "SAME_DAY", "PICKUP", "CURBSIDE", "LOCKER", "DIGITAL"]),
       priority: z.enum(["LOW", "NORMAL", "HIGH", "RUSH"]),
       destination: z.string(),
       requestedBy: z.string(),
+      requestSource: z.enum(["CHAT", "EMAIL"]),
       notes: z.string()
     })
   }
