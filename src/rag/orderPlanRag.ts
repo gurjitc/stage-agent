@@ -44,13 +44,53 @@ const orderPlanSchema = z.object({
   rationale: z.string().min(1)
 });
 
-function getRuleIds(chunks: RetrievedChunk[]): string[] {
-  return Array.from(new Set(chunks.flatMap((c) => c.chunk.ruleIds)));
+function hasColdIntent(request: string): boolean {
+  const normalized = request.toLowerCase();
+  const explicitCold = /\brefrigerated\b|\bcold\b|\bfrozen\b|\bchilled\b|\bperishable\b/.test(normalized);
+  const foodLexical = /\bmilk\b|\beggs?\b/.test(normalized);
+  const techLexical = /\btech\b|\belectronic\w*\b|\bappliance\w*\b|\bfrother\b|\btimer\b|\bdevice\b/.test(normalized);
+  return explicitCold || (foodLexical && !techLexical);
+}
+
+function getRuleIds(chunks: RetrievedChunk[], request: string, fulfillmentProfile: string | null): string[] {
+  const normalized = request.toLowerCase();
+  const coldIntent = hasColdIntent(request);
+  const rushIntent = /\brush\b|\bpriority\b|\bsla\b|\burgent\b/.test(normalized);
+
+  const relevantChunks = chunks.filter((entry) => {
+    const text = entry.chunk.text.toLowerCase();
+
+    if (fulfillmentProfile && text.includes(fulfillmentProfile.toLowerCase())) {
+      return true;
+    }
+
+    if (!coldIntent && /cold_chain_\d/.test(text)) {
+      return false;
+    }
+
+    if (normalized.includes("tech") && !text.includes("tech") && !text.includes("fragile")) {
+      return false;
+    }
+
+    if (normalized.includes("digital") && !text.includes("digital")) {
+      return false;
+    }
+
+    if (rushIntent && !/\brush\b|\bpriority\b|\bsla\b/.test(text)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const source = relevantChunks.length > 0 ? relevantChunks : chunks.slice(0, 2);
+  return Array.from(new Set(source.flatMap((c) => c.chunk.ruleIds)));
 }
 
 function inferFallbackPlan(request: string, category: OrderCategory, chunks: RetrievedChunk[]): OrderPlan {
   const normalized = request.toLowerCase();
   const chunkText = chunks.map((c) => c.chunk.text.toLowerCase()).join("\n\n");
+  const rushIntent = /\brush\b|\bpriority\b|\bsla\b|\burgent\b/.test(normalized);
 
   const suggestsMilk = /\bmilk\b/.test(normalized);
   const suggestsEggs = /\beggs?\b/.test(normalized);
@@ -78,10 +118,18 @@ function inferFallbackPlan(request: string, category: OrderCategory, chunks: Ret
     }
   }
 
+  let citedRuleIds = getRuleIds(chunks, request, fulfillmentProfile);
+  if (rushIntent) {
+    const priorityRuleIds = chunks
+      .filter((entry) => /\brush\b|\bpriority\b|\bsla\b/.test(entry.chunk.text.toLowerCase()))
+      .flatMap((entry) => entry.chunk.ruleIds);
+    citedRuleIds = Array.from(new Set([...citedRuleIds, ...priorityRuleIds]));
+  }
+
   return {
     fulfillmentProfile,
     suggestedItems,
-    citedRuleIds: getRuleIds(chunks),
+    citedRuleIds,
     rationale:
       fulfillmentProfile === "COLD_CHAIN_2"
         ? "Applied refrigerated curbside rule from retrieved context."

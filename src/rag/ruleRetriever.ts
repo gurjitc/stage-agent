@@ -106,6 +106,7 @@ class InMemoryVectorStore {
 
   similaritySearch(queryVector: number[], topK: number, queryText: string, config: RetrievalConfig): RetrievedChunk[] {
     const hints = inferMetadataHints(queryText);
+    const queryNormalized = queryText.toLowerCase();
     const useMetadataFilter = config.useMetadataFilter ?? true;
     const useHybrid = config.useHybrid ?? true;
     const useRerank = config.useRerank ?? true;
@@ -147,7 +148,18 @@ class InMemoryVectorStore {
         .map((entry) => {
           const rerankBoost = lexicalCoverageScore(queryTokens, entry.row.tokens);
           const profileBoost = hints.tags.includes("refrigerated") && entry.row.chunk.text.toLowerCase().includes("cold_chain_2") ? 0.2 : 0;
-          const rerankScore = entry.score + rerankBoost + profileBoost;
+          const chunkTextLower = entry.row.chunk.text.toLowerCase();
+          const hasColdChainProfile = chunkTextLower.includes("cold_chain_");
+          const noColdIntent = !hints.tags.includes("refrigerated");
+          const techIntent = hints.categories.includes("tech") || queryNormalized.includes("tech");
+          const digitalIntent = hints.deliveryMethods.includes("digital") || queryNormalized.includes("digital");
+
+          let conflictPenalty = 0;
+          if (noColdIntent && hasColdChainProfile && (techIntent || digitalIntent)) {
+            conflictPenalty = -0.35;
+          }
+
+          const rerankScore = entry.score + rerankBoost + profileBoost + conflictPenalty;
           return { ...entry, rerankScore, score: rerankScore };
         })
         .sort((a, b) => b.score - a.score);
@@ -240,7 +252,9 @@ function extractMetadata(text: string): RuleChunk["metadata"] {
     .filter((d) => normalized.includes(d))
     .map((d) => d.replace("same-day", "same_day"));
 
-  const tags = ["refrigerated", "cold-chain", "fragile", "rush", "compliance"].filter((t) => normalized.includes(t));
+  const tags = ["refrigerated", "cold-chain", "fragile", "rush", "compliance", "frozen", "perishable", "chilled"].filter((t) =>
+    normalized.includes(t)
+  );
   const fulfillmentProfiles = Array.from(new Set(normalized.match(/[a-z]+_[a-z0-9_]+/g) ?? [])).map((p) => p.toUpperCase());
 
   return {
@@ -253,12 +267,46 @@ function extractMetadata(text: string): RuleChunk["metadata"] {
 
 function inferMetadataHints(query: string): QueryMetadataHints {
   const normalized = query.toLowerCase();
+  const hasTechContext =
+    normalized.includes("tech") ||
+    normalized.includes("electronics") ||
+    normalized.includes("appliance") ||
+    normalized.includes("device");
+  const hasApplianceLexical =
+    normalized.includes("frother") ||
+    normalized.includes("timer") ||
+    normalized.includes("maker") ||
+    normalized.includes("machine") ||
+    normalized.includes("heater");
+  const hasFoodLexical = normalized.includes("milk") || normalized.includes("eggs");
+  const hasExplicitColdLexical =
+    normalized.includes("refrigerated") ||
+    normalized.includes("cold") ||
+    normalized.includes("frozen") ||
+    normalized.includes("perishable") ||
+    normalized.includes("chilled");
+
+  const coldChainIntent = hasExplicitColdLexical || (hasFoodLexical && !hasTechContext && !hasApplianceLexical);
+  const rushIntent =
+    normalized.includes("rush") ||
+    normalized.includes("priority") ||
+    normalized.includes("sla") ||
+    normalized.includes("urgent");
+
+  const tags = ["fragile"].filter((t) => normalized.includes(t));
+  if (coldChainIntent) {
+    tags.push("refrigerated");
+  }
+  if (rushIntent) {
+    tags.push("rush");
+  }
+
   return {
     categories: ["tech", "grocery", "medical", "regular"].filter((c) => normalized.includes(c)),
     deliveryMethods: ["curbside", "pickup", "locker", "same day", "same-day", "digital"]
       .filter((d) => normalized.includes(d))
       .map((d) => d.replace("same day", "same_day").replace("same-day", "same_day")),
-    tags: ["refrigerated", "milk", "eggs", "cold", "fragile"].filter((t) => normalized.includes(t))
+    tags
   };
 }
 
@@ -271,13 +319,37 @@ function hasAnyIntersection(left: string[], right: string[]): boolean {
 }
 
 function matchesMetadataHints(chunk: RuleChunk, hints: QueryMetadataHints): boolean {
-  const categoryMatch = hints.categories.length === 0 || hasAnyIntersection(chunk.metadata.categories, hints.categories);
-  const deliveryMatch = hints.deliveryMethods.length === 0 || hasAnyIntersection(chunk.metadata.deliveryMethods, hints.deliveryMethods);
+  const needsRefrigerated = hints.tags.includes("refrigerated");
+  const coldTagMatch = chunk.metadata.tags.some((t) => ["refrigerated", "cold-chain", "frozen", "perishable", "chilled"].includes(t));
+  if (needsRefrigerated && !coldTagMatch) {
+    return false;
+  }
 
-  const needsRefrigerated = hints.tags.some((t) => ["refrigerated", "milk", "eggs", "cold"].includes(t));
-  const tagMatch = !needsRefrigerated || chunk.metadata.tags.some((t) => ["refrigerated", "cold-chain"].includes(t));
+  const needsRush = hints.tags.includes("rush");
+  const rushTagMatch = chunk.metadata.tags.includes("rush");
+  if (needsRush) {
+    return rushTagMatch;
+  }
 
-  return categoryMatch && deliveryMatch && tagMatch;
+  const hasCategoryHint = hints.categories.length > 0;
+  const hasDeliveryHint = hints.deliveryMethods.length > 0;
+  const categoryMatch = hasAnyIntersection(chunk.metadata.categories, hints.categories);
+  const deliveryMatch = hasAnyIntersection(chunk.metadata.deliveryMethods, hints.deliveryMethods);
+  const isDigitalIntent = hints.deliveryMethods.includes("digital");
+
+  if (isDigitalIntent) {
+    return deliveryMatch;
+  }
+
+  if (!hasCategoryHint && !hasDeliveryHint) {
+    return true;
+  }
+
+  if (hasCategoryHint && hasDeliveryHint) {
+    return categoryMatch || deliveryMatch;
+  }
+
+  return hasCategoryHint ? categoryMatch : deliveryMatch;
 }
 
 function termFrequency(tokens: string[]): Map<string, number> {
