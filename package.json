@@ -9,6 +9,7 @@
     "ui:stop": "kill-port 3000",
     "ui:fresh": "npm run ui:stop && npm run ui",
     "rag:demo": "tsx src/rag/demo.ts",
+    "rag:eval": "tsx src/rag/eval.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit"
   },

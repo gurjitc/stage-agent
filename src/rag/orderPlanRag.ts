@@ -1,7 +1,7 @@
 import { ChatOllama } from "@langchain/ollama";
 import { z } from "zod";
 import type { OrderCategory, ParsedOrderRequest } from "../types.js";
-import { retrieveTopRuleChunks, type RetrievedChunk } from "./ruleRetriever.js";
+import { retrieveTopRuleChunks, type RetrievedChunk, type RetrievalConfig } from "./ruleRetriever.js";
 
 export interface OrderPlan {
   fulfillmentProfile: string | null;
@@ -19,6 +19,15 @@ export interface RagOrderPlanResult {
   embeddingModel: string;
   vectorStore: "IN_MEMORY";
   usedLlm: boolean;
+  retrieval: {
+    mode: "VECTOR_ONLY" | "HYBRID";
+    metadataFilterApplied: boolean;
+    metadataHints: {
+      categories: string[];
+      deliveryMethods: string[];
+      tags: string[];
+    };
+  };
 }
 
 const orderPlanSchema = z.object({
@@ -83,16 +92,23 @@ function inferFallbackPlan(request: string, category: OrderCategory, chunks: Ret
 export async function buildOrderPlanWithRag(input: {
   request: string;
   parsedRequest: ParsedOrderRequest;
+  retrievalConfig?: RetrievalConfig;
+  forceFallbackPlanner?: boolean;
 }): Promise<RagOrderPlanResult> {
-  const retrieval = await retrieveTopRuleChunks(input.request, 5);
+  const retrieval = await retrieveTopRuleChunks(input.request, 5, input.retrievalConfig ?? {});
 
-  if ((process.env.RAG_USE_LLM_PLANNER ?? "true").toLowerCase() === "false") {
+  if (input.forceFallbackPlanner || (process.env.RAG_USE_LLM_PLANNER ?? "true").toLowerCase() === "false") {
     return {
       plan: inferFallbackPlan(input.request, input.parsedRequest.orderCategory, retrieval.chunks),
       retrievedChunks: retrieval.chunks,
       embeddingModel: retrieval.embeddingModel,
       vectorStore: retrieval.vectorStore,
-      usedLlm: false
+      usedLlm: false,
+      retrieval: {
+        mode: retrieval.retrievalMode,
+        metadataFilterApplied: retrieval.metadataFilterApplied,
+        metadataHints: retrieval.metadataHints
+      }
     };
   }
 
@@ -129,7 +145,12 @@ export async function buildOrderPlanWithRag(input: {
       retrievedChunks: retrieval.chunks,
       embeddingModel: retrieval.embeddingModel,
       vectorStore: retrieval.vectorStore,
-      usedLlm: true
+      usedLlm: true,
+      retrieval: {
+        mode: retrieval.retrievalMode,
+        metadataFilterApplied: retrieval.metadataFilterApplied,
+        metadataHints: retrieval.metadataHints
+      }
     };
   } catch {
     return {
@@ -137,7 +158,12 @@ export async function buildOrderPlanWithRag(input: {
       retrievedChunks: retrieval.chunks,
       embeddingModel: retrieval.embeddingModel,
       vectorStore: retrieval.vectorStore,
-      usedLlm: false
+      usedLlm: false,
+      retrieval: {
+        mode: retrieval.retrievalMode,
+        metadataFilterApplied: retrieval.metadataFilterApplied,
+        metadataHints: retrieval.metadataHints
+      }
     };
   }
 }

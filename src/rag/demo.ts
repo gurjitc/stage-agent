@@ -50,7 +50,8 @@ async function main(): Promise<void> {
       })),
       embeddingModel: withRag.embeddingModel,
       vectorStore: withRag.vectorStore,
-      usedLlm: withRag.usedLlm
+      usedLlm: withRag.usedLlm,
+      retrieval: withRag.retrieval
     }
   };
 
